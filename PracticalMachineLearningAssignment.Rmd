@@ -1,0 +1,138 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "George Kyritsis"
+date: "Tuesday, September 16, 2014"
+output: html_document
+---
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, i will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har.The goal is to predict the manner in which they did the exercise.
+
+Setting the Working Directory
+-----------------------------
+```{r}
+setwd("C:/Users/George/Coursera/Machine_Learning_Project")
+```
+
+Downloading the Data
+--------------------
+```{r, eval=FALSE}
+#Downloading the training set
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "pml-training.csv")
+
+#Downloading the test set
+download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "pml-testing.csv")
+```
+
+Loading the Data
+----------------
+```{r}
+trainingOriginal = read.csv("pml-training.csv", header = TRUE, na.strings = c("", "NA"))
+dim(trainingOriginal)
+```
+
+```{r}
+testingOriginal = read.csv("pml-testing.csv", na.strings = c("", "NA"))
+dim(testingOriginal)
+```
+
+Reducing the number of predictors
+---------------------------------
+
+Removing the Columns with NAs
+```{r}
+trainingRemovedNA = trainingOriginal[, colSums(is.na(trainingOriginal)) == 0]
+dim(trainingRemovedNA)
+```
+
+Removing more Columns that are irrelevant. Those are X, the username, the variables measuring time and new_window and num_window (the first 7 columns)
+```{r}
+trainingIrrelevant = trainingRemovedNA[, -c(1:7)]
+dim(trainingIrrelevant)
+```
+
+Finding the variables with high correlation and constructing a correlation Matrix
+```{r}
+M = abs(cor(trainingIrrelevant[, -53]))
+diag(M) = 0
+which(M > 0.90, arr.ind = T)
+```
+
+A graphical Display of the Correlation Matrix
+```{r}
+library(corrplot)
+corrplot(M, method = "color", tl.pos = "n")
+```
+
+Searching through a correlation matrix and removing columns from the training set to reduce pair-wise correlations
+```{r}
+library(caret)
+removeCorColumns = findCorrelation(M, cutoff = .90, verbose = FALSE)
+trainingCor = trainingIrrelevant[, -c(removeCorColumns)]
+dim(trainingCor)
+```
+
+Splitting the data to training and test sets for cross validation
+-----------------------------------------------------------------
+```{r}
+inTrain = createDataPartition(y = trainingCor$classe, p = 0.7, list = FALSE)
+training = trainingCor[inTrain, ]
+testing = trainingCor[-inTrain, ]
+```
+
+Random Forests
+--------------
+```{r}
+set.seed(21)
+```
+
+Fitting the model
+```{r}
+library(randomForest)
+modFit = randomForest(classe ~., data=training,  importance=TRUE)
+modFit
+```
+
+Plotting the overall error of the model
+```{r}
+layout(matrix(c(1,2),nrow=1),
+       width=c(4,1)) 
+par(mar=c(5,4,4,0)) #No margin on the right side
+plot(modFit, log="y")
+par(mar=c(5,0,4,2)) #No margin on the left side
+plot(c(0,1),type="n", axes=F, xlab="", ylab="")
+legend("top", colnames(modFit$err.rate),col=1:6,cex=0.8,fill=1:6)
+```
+
+Plotting the variable importance
+```{r}
+varImpPlot(modFit)
+```
+
+Predicting new values
+```{r}
+pred = predict(modFit, testing)
+testing$predRight = pred == testing$classe
+predM = table(pred, testing$classe)
+predM
+```
+
+Out of sample Accuracy
+```{r}
+sum(diag(predM))/sum(sum(predM))
+```
+The Estimate is very Accurate
+
+Predicting the manner in which they did the exercise (A, B, C, D or E) using the data (predictors) from the original testing set
+-----------------------------------------------------------------------------------------------------------
+```{r}
+answers = predict(modFit, testingOriginal)
+answers
+```
+
+
+
+
+
+
